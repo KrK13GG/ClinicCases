@@ -1,0 +1,198 @@
+@mixin flex-center() {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+@mixin flex-vert-center() {
+  display: flex;
+  align-items: center;
+}
+
+@mixin light-border() {
+  border: 1px solid $border-gray;
+}
+
+@mixin dark-border() {
+  border: 1px solid black;
+}
+@mixin body-font() {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 500;
+  color: $black;
+  @media screen and (max-width: $lg) {
+    font-size: 1.2rem;
+  }
+}
+@mixin title-font() {
+  font-family: lemonde-journal, sans-serif;
+  color: $black;
+}
+@mixin box-shadow--light() {
+  box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+}
+@mixin box-shadow() {
+  box-shadow: 0.2px 1px 1.4px rgba(0, 0, 0, 0.02),
+    0.4px 2.3px 3.3px rgba(0, 0, 0, 0.028),
+    0.8px 4.4px 6.3px rgba(0, 0, 0, 0.035),
+    1.3px 7.8px 11.2px rgba(0, 0, 0, 0.042),
+    2.5px 14.6px 20.9px rgba(0, 0, 0, 0.05), 6px 35px 50px rgba(0, 0, 0, 0.07);
+}
+
+@mixin primary-button() {
+  @include body-font();
+  @include box-shadow--light();
+  font-weight: 700;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  background-color: $dark-blue;
+  border: 2px solid $dark-blue;
+  outline: none;
+  padding: 1rem;
+  &:hover {
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  &:focus {
+    box-shadow: none;
+  }
+}
+
+.primary-button{
+  @include primary-button();
+}
+
+@mixin secondary-button {
+  @include primary-button();
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  background-color: $light-blue;
+  color: $dark-blue;
+  border: 2px solid $dark-blue;
+  border-radius: 50%;
+  font-family: 'Montserrat';
+  text-align: left;
+  font-weight: 900;
+  font-size: 1rem;
+  font-weight: 900;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  white-space: nowrap;
+
+  img {
+    height: 40px;
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    padding: 0.75rem;
+    border-radius: 50%;
+  }
+  span {
+    visibility: collapse;
+    opacity: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding: 0 4rem 0rem 6rem;
+    
+  }
+  &:hover {
+    cursor: pointer;
+    border-top-right-radius: 50px;
+    border-bottom-right-radius: 50px;
+    border-top-left-radius: 50px;
+    border-bottom-left-radius: 50px;
+    transition: max-width 0.2s ease-in-out 1s, border-radius 0.1s ease-in-out 0.9s, width 0.2s ease-in-out 1s, padding 0.2s ease-in-out 1s;
+    box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.1);
+    width: 175px;
+    img {
+      background: hsl(203, 48%, 68%);
+      transition: background 0.75s ease-in-out;
+    }
+
+    span {
+      visibility: visible;
+      opacity: 1;
+      transition: visibility 0.5s linear 1s, opacity 0.3s ease-in-out 1s;
+
+    }
+  }
+  &:focus{
+    border-radius: 50%;
+    width: 40px;
+
+    span {
+      visibility: collapse;
+      opacity: 0;
+    }
+  }
+}
+
+@mixin neutral-button {
+  @include box-shadow--light();
+  padding: 1rem;
+  margin: 1rem;
+  border: 1px solid $border-gray;
+  border-radius: 4px;
+  width: 125px;
+  &:focus {
+    box-shadow: none;
+  }
+}
+
+.neutral-button {
+  @include neutral-button();
+}
+
+@mixin disabled-button() {
+  @include primary-button();
+  background-color: white;
+  border: 1px solid $border-gray;
+  color: $border-gray;
+  &:hover {
+    cursor: not-allowed;
+  }
+}
+
+@mixin input() {
+  @include body-font();
+  @include light-border();
+  padding: 1rem;
+  border-radius: 5px;
+  font-weight: 400;
+  ::placeholder {
+    color: $border-gray;
+  }
+
+  &:focus {
+    @include box-shadow();
+    @include dark-border();
+
+    outline: none;
+  }
+}
+
+@mixin link-with-no-underline() {
+  text-decoration: none;
+  color: inherit;
+  &:hover {
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+@mixin triangle() {
+  content: '';
+  display: block;
+  background-image: url('../ico/triangle-down.svg');
+  height: 20px;
+  width: 20px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  position: absolute;
+  right: 14px;
+  top: 11px;
+}

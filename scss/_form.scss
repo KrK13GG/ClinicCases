@@ -1,0 +1,179 @@
+input,
+select,
+textarea {
+  @include input();
+}
+
+.form-control__two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 1rem;
+}
+
+.form__control {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 4rem;
+  margin: 4rem 1rem 0rem;
+  cursor: pointer;
+  label {
+    // transform: translateY(4rem);
+    text-align: left;
+    padding: 0.5rem 1rem;
+    left: 0;
+    position: absolute;
+    top: 0.7rem;
+    transition: transform 0.1s ease-out;
+    min-height: 3.8rem;
+    color: $border-gray;
+    cursor: pointer;
+
+    &.float,
+    &.float--lock {
+      transform: translateY(0);
+      font-size: 1.2rem;
+      padding: 1rem 0;
+    }
+  }
+
+  input:focus + label,
+  input:not(:placeholder-shown) + label,
+  textarea:focus + label,
+  textarea:not(:placeholder-shown) + label,
+  &.form__control--select label {
+    top: -3rem;
+    font-size: 1.2rem;
+    padding: 1rem 1rem 1rem 0rem;
+    color: black;
+    img {
+      display: none;
+    }
+  }
+  input::placeholder,
+  textarea::placeholder {
+    opacity: 0;
+  }
+
+  input,
+  textarea {
+    width: 100%;
+    color: black;
+  }
+
+  &.form__control--select {
+    position: relative;
+    select {
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      padding-right: 3rem;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      background-image: url('../../html/ico/triangle-down.svg');
+      height: 20px;
+      width: 19px;
+      display: block;
+      background-size: cover;
+      bottom: 10px;
+      right: 7px;
+      z-index: 9;
+    }
+  }
+}
+.form__control--checkbox {
+  margin: 2rem;
+  text-align: left;
+}
+
+form.invalid {
+  input:invalid,
+  textarea:invalid,
+  select:invalid,
+  .ss-main.invalid {
+    border: 1px solid red;
+    border-color: red;
+  }
+}
+#newCaseModal {
+  input:valid,
+  select:valid {
+    border-color: black;
+    border-width: 2px;
+  }
+}
+form {
+  width: 100%;
+}
+.form-control__dual {
+  display: grid;
+  grid-template-columns: 1fr 4fr;
+  grid-gap: 1rem;
+}
+.form-control__multiple {
+  position: relative;
+  background-color: $trans-border-gray;
+  padding: 1rem;
+  margin: 1rem;
+  .form-control__dual:last-child {
+    grid-template-columns: 1fr 3fr 1fr;
+  }
+}
+
+.form__add {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 10%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  i {
+    cursor: pointer;
+    margin-top: 3rem;
+    img {
+      width: 2rem;
+    }
+  }
+}
+.form__array {
+  display: flex;
+  flex-direction: column;
+
+  legend {
+    text-align: left;
+    font-size: 1.2rem;
+    padding: 1rem 0;
+  }
+
+  .array__grid {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-gap: 1rem;
+    margin: 0.5rem 0;
+
+    &.array__grid--two {
+      grid-template-columns: 1fr auto;
+    }
+  }
+}
+
+@media screen and (max-width: $tablet) {
+  #addButton {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 1rem;
+  }
+}
+
+.let-me-edit-this {
+  text-decoration: underline;
+  font-size: 10px;
+  cursor: pointer;
+  float: right;
+}

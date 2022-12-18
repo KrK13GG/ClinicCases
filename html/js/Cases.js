@@ -1,519 +1,594 @@
+import {
+  getCaseNotes,
+  getCaseView,
+  getCaseData,
+  getAssignedUsersView,
+  getAssignedUsersInterface,
+  assignUsersToCase,
+  getDocuments,
+  getCaseEventData,
+} from '../../lib/javascripts/axios.js';
+import { getCookie } from '../../lib/javascripts/cookies.js';
 
- /* global adjustedHeight, alert, notify, fnCreateSelect, callCaseWindow, router */
- //init
-var oTable, aoColumns;
-
-function escapeHtml(text) {
-  var map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-
-  return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-}
-
-$(document).ready(function() {
-    //set the intial value for the caseStatus span on load
-    var chooserVal = 'open';
-
-    //Get the column definitions to use in oTable
-    $.ajax({
-        url: 'lib/php/data/cases_columns_load.php',
-        dataType: 'json',
-        error: function() {
-            alert('Sorry, there is an error in your ClinicCases configuration');
-            return true;
-        },
-        success: function(data) {
-            if (data) {
-                aoColumns = data.aoColumns;
-                oTable = $('#table_cases').dataTable({
-                    'bJQueryUI': true,
-                    'bProcessing': true,
-                    'bScrollInfinite': true,
-                    'bScrollCollapse': true,
-                    'bSortCellsTop': true,
-                    'bStateSave':true,
-                    'iCookieDuration':60*60*24*365,
-                    'sScrollY': adjustedHeight - 95,
-                    'iDisplayLength': 50,
-                    'aaSorting': [[4, 'asc']],
-                    'aoColumns': aoColumns,
-                    'sDom': 'R<\'H\'fTCi>rt',
-                    'oColVis': {
-                        'aiExclude': [0,6,7],
-                        'bRestore': true,
-                        'buttonText': 'Columns',
-                        'fnStateChange': function(iColumn, bVisible) {
-                            $('div.dataTables_scrollHeadInner thead th.addSelects:empty').each(function() {
-                                this.innerHTML = fnCreateSelect(oTable.fnGetColumnData(iColumn, true, false, true));
-                            });
-                        }
-                    },
-                    'oTableTools': {
-                        'sSwfPath': 'lib/DataTables-1.8.2/extras/TableTools/media/swf/copy_cvs_xls_pdf.swf',
-                        'aButtons': [ {
-                                'sExtends': 'collection',
-                                'sButtonText': 'Print/Export',
-                                'aButtons': [
-                                    {'sExtends': 'copy',
-                                        'mColumns': 'visible'
-                                    },
-
-                                    {'sExtends': 'csv',
-                                        'mColumns': 'visible'
-                                    },
-
-                                    {'sExtends': 'xls',
-                                        'mColumns': 'visible'
-                                    },
-
-                                    {'sExtends': 'pdf',
-                                        'mColumns': 'visible'
-                                    },
-
-                                    {'sExtends': 'print',
-                                        'mColumns': 'visible'
-                                    }
-                                ]
-                            },
-                            {
-                                'sExtends':'text',
-                                'sButtonText':'Reset',
-                                'sButtonClass':'DTTT_button_reset',
-                                'sButtonClassHover':'DTTT_button_reset_hover'
-                            },
-                            {
-                                'sExtends':'text',
-                                'sButtonText':'New Case',
-                                'sButtonClass':'DTTT_button_new_case',
-                                'sButtonClassHover':'DTTT_button_new_case_hover'
-                            }
-                        ]
-                        },
-                        'sAjaxSource': 'lib/php/data/cases_load.php',
-                        'bDeferRender': true,
-                        "aoColumnDefs": [ //see https://datatables.net/forums/discussion/10189/datatables-does-not-display-character#
-                            {
-                                "fnRender": function ( o ) {
-                                return String(o.aData[o.iDataColumn])
-                                    .replace(/&/g, '&amp;')
-                                    .replace(/"/g, '&quot;')
-                                    .replace(/'/g, '&#39;')
-                                    .replace(/</g, '&lt;')
-                                    .replace(/>/g, '&gt;');
-                        
-                                },
-                                //"aTargets": [ 0,1,2,3,4,5 ]
-                                "aTargets": ['_all']
-                            }
-                        ],
-                        'fnInitComplete': function() {
-                        //When page loads, default filter is applied: open cases
-                        // (i.e., all cases where the date close field is empty.
-                            oTable.fnFilter('^$', oTable.fnGetColumnIndex('Date Close'), true, false);
-                            //resizes the table whenever parent element size changes
-                            $(window).bind('resize', function() {
-                                oTable.fnDraw(false);
-                                oTable.fnAdjustColumnSizing();
-                            });
-                            $('div.dataTables_scrollHeadInner thead th.addSelects').each(function() {
-                                //Get the index of the column from its name attribute
-                                var columnIndex = oTable.fnGetColumnIndex($(this).attr('name'));
-                                this.innerHTML = fnCreateSelect(oTable.fnGetColumnData(columnIndex, true, false, true));
-                            });
-                            //Important: After the selects have been rendered, set visibilities.
-                            //This allows the hidden selects to get the proper values.
-                            //See http://datatables.net/forums/comments.php?DiscussionID=3318
-
-                            //Add case status seletctor
-                            $('div.dataTables_filter').append('<select id="chooser"><option value="open" '+
-                            'selected=selected>Open Cases Only</option><option value="closed">Closed Cases Only' +
-                            '</option><option value="all">All Cases</option></select>  <a href="#" id="set_advanced">' +
-                            'Advanced Search</a>');
-
-                            //Have ColVis and reset buttons pick up the DTTT class
-                            $('div.ColVis button').removeClass()
-                            .addClass('DTTT_button DTTT_button_collection ui-button ui-state-default');
-
-                            //Event for reset button
-                            $('#ToolTables_table_cases_6').click(function() { //reset button
-                                fnResetAllFilters();
-                            });
-
-                            //Check if user can add cases; if not, remove new case button
-                            if (!$('#table_cases').hasClass('can_add')) {
-                                $('#ToolTables_table_cases_7').remove();
-                            } else { //add listener
-                                $('#ToolTables_table_cases_7').click(function(){
-                                    //Add new row to cm_cases_table
-                                    $.post('lib/php/utilities/create_new_case.php',function(data){
-                                        var serverResponse = $.parseJSON(data);
-                                        if (serverResponse.error === true) {
-                                            notify(serverResponse.message, true);
-                                        } else {
-                                            var newId = serverResponse.newId;
-                                            callCaseWindow(newId,true);//true for new case
-                                        }
-                                    });
-
-                                });
-                            }
-
-                            //Change the case status select
-                            $('#chooser').live('change', function(event) {
-                                switch ($(this).val()) {
-                                    case 'all':
-                                        chooserVal = 'open and closed';
-                                        oTable.fnFilter('', oTable.fnGetColumnIndex('Date Close'));
-                                        break;
-                                    case 'open':
-                                        chooserVal = 'open';
-                                        oTable.fnFilter('^$', oTable.fnGetColumnIndex('Date Close'), true, false);
-                                        break;
-                                    case 'closed':
-                                        chooserVal = 'closed';
-                                        oTable.fnFilter('^.+$', oTable.fnGetColumnIndex('Date Close'), true, false);
-                                        break;
-                                }
-                            });
-
-                            //Set css for advanced date function; make room for the operator selects
-                            $('#set_advanced').live('click', function(event) {
-                                event.preventDefault();
-                                if ($('tr.advanced, tr.advanced_2').css('display') !== 'none') {
-                                    $('tr.advanced, tr.advanced_2').css({'display': 'none'});
-                                } else {
-                                    $('th.ui-state-default').css({'border-bottom': '0px'});
-                                    $('.complex').children().css({'display': 'inline','margin-bottom': '0px'});
-                                    //$('#date_open , #date_close').css({'width':'65%','margin-top':'18px'});
-                                    $('#open_range , #close_range').css({'margin-top': '18px'});
-                                    $('thead tr.advanced').toggle('slow');
-                                    $('#second_open_cell, #second_close_cell').css({'visibility': 'hidden'});
-
-                                    //Set the big filter to all cases
-                                    oTable.fnFilter('', oTable.fnGetColumnIndex('Date Close'), true, false);
-                                    $('#chooser').val('all');
-                                    chooserVal = 'open and closed';
-                                }
-                                oTable.fnDraw();
-                            });
-
-                            $('#addopenRow').click(function(event) {
-                                event.preventDefault();
-                                if ($('#second_open_cell').css('visibility') === 'visible') {
-                                    $(this).text('Add Condition');
-                                    $('#second_open_cell').css({'visibility': 'hidden'});
-                                    $('thead tr.advanced_2').hide('slow');
-                                } else {
-                                    $(this).text('AND IS');
-                                    $('#second_open_cell').css({'visibility': 'visible'});
-                                    $('#date_open_2 , #date_close_2').css({'width': '60%'});
-                                    $('thead tr.advanced_2').show('slow');
-                                }
-                            });
-
-                            $('#addcloseRow').click(function(event) {
-                                event.preventDefault();
-                                if ($('#second_close_cell').css('visibility') === 'visible') {
-                                    $(this).text('Add Condition');
-                                    $('#second_close_cell').css({'visibility': 'hidden'});
-                                    $('thead tr.advanced_2').hide('slow');
-                                } else {
-                                    $(this).text('AND IS');
-                                    $('#second_close_cell').css({'visibility': 'visible'});
-                                    $('#date_open_2 , #date_close_2').css({'width': '60%'});
-                                    $('thead tr.advanced_2').show('slow');
-                                }
-                            });
-
-                            //Code for advanced search using inputs
-                            $('thead input').live('keyup', function() {
-                                var colName = $(this).attr('name');
-                                var colIndex = oTable.fnGetColumnIndex(colName);
-                                oTable.fnFilter(this.value, colIndex);
-                            });
-
-                            //Enable search via selects in advanced search
-                            $('div.dataTables_scrollHeadInner tr.advanced th.addSelects select').live('change', function() {
-                                var Oparent = $(this).parent();
-                                var colIndex = oTable.fnGetColumnIndex(Oparent.attr('name'));
-                                var val = this.value;
-                                //regex needed to avoid, e.g., a search on 'Guilty' from also returning 'Not Guilty
-                                var regex = ('^' + val + '$');
-                                oTable.fnFilter(regex, colIndex, true, false, false);
-                            });
-
-                            //Add datepickers
-                            $(function() {
-                                $('#date_open , #date_close, #date_open_2, #date_close_2').datepicker({
-                                    changeMonth: true,
-                                    changeYear: true,
-                                    onSelect: function() {
-                                        $(this).css({'color': 'black'});
-                                        oTable.fnDraw();
-                                    }
-                                });
-                            });
-
-                            //Add trigger for when user changes less/greater/equal
-
-                            $('#open_range, #open_range_2, #close_range, #close_range_2').live('change', function(event) {
-                                oTable.fnDraw();
-                            });
-
-                            //Listen for click on table row; open case
-                            $('#table_cases tbody').click(function(event) {
-                                var iPos = oTable.fnGetPosition(event.target.parentNode);
-                                var aData = oTable.fnGetData(iPos);
-                                var iId = aData[0];
-                                callCaseWindow(iId);
-
-                            });
-
-                            //Set table for printing, if user clicks dataTables print
-                            $('#table_cases').addClass('print_content');
-                            $('tr.advanced, tr.advanced_2').addClass('print_content_no');
-                            $('#ToolTables_table_cases_5').live('click',function(){
-                                //the dataTables default print dialog is not working, so
-                                //add our own
-                                var dialogWin = $('<div class="dialog-casenote-delete" title="Print">Please use your ' +
-                                'browser\'s print function to print this table. Press escape when finished.</div>')
-                                .dialog({
-                                    autoOpen: false,
-                                    resizable: false,
-                                    modal: true,
-                                    buttons: {'OK':function() {
-                                        $(this).dialog('destroy');
-                                    }
-                                    }
-                                });
-                                $(dialogWin).dialog('open');
-                            });
-
-                            $('#processing').hide(); //hide the "loading" div after load.
-
-                        },
-                        'oLanguage': {
-                            'sInfo': 'Found <b>_TOTAL_</b> <span id="caseStatus"></span> cases',
-                            'sInfoFiltered': 'from a total of <b>_MAX_</b> cases',
-                            'sEmptyTable': 'No cases found.',
-                            'sZeroRecords':'No cases found.'
-                        },
-                        'fnDrawCallback': function() {
-                            $('#caseStatus').text(chooserVal);
-                            //this ensures that the text of the date is visible
-                            $('.hasDatepicker').css({'width': '60%'});
-                            //this ensures that the range select doesn't go out of line
-                            $('.complex').css({'min-width': '160px'});
-                        }
-                    });
-                router();
-            }
-        }
-    });
-
-    //Reset displayed data
-    function fnResetAllFilters() {
-        var oSettings = oTable.fnSettings();
-
-        //reset advanced header selects
-        for (iCol = 0; iCol < oSettings.aoPreSearchCols.length; iCol++) {
-            oSettings.aoPreSearchCols[iCol].sSearch = '';
-        }
-
-        //reset the main filter
-        oTable.fnFilter('');
-
-        //reset the columns to their original order.
-        ColReorder.fnReset(oTable);
-
-        //reset the user display for inputs and selects
-        $('input').each(function() {
-            this.value = '';
-        });
-        $('select').each(function() {
-            this.selectedIndex = '0';
-        });
-        $('#addOpenRow, #addCloseRow').each(function() {
-            $(this).text('Add Condition');
-        });
-        $('#second_open_cell, #second_close_cell').css({'visibility': 'hidden'});
-        $('thead tr.advanced_2').hide('slow');
-
-        //return to default open cases filter
-        oTable.fnFilter('^$', oTable.fnGetColumnIndex('Date Close'), true, false);
-        chooserVal = 'open';
-
-        //return to default sort - Last Name
-        oTable.fnSort([[oTable.fnGetColumnIndex('Last Name'), 'asc']]);
-
-        //redraw the table so that all columns line up
-        oTable.fnDraw();
-
-        //reset the default values for advanced search
-        //$("thead input").each( function (i) {
-        //this.value = asInitVals[$("thead input").index(this)];
-        //this.className = "search_init"
-        //});
-    }
+document.addEventListener('DOMContentLoaded', () => {
+  initCasesTable();
+  initOpenCaseFunctions();
+  setUpOpenCasesMobileSelectListener();
+  setUpCloseCaseMobileListener();
 });
 
-//Filtering for date fields
-$.fn.dataTableExt.afnFiltering.push(
-function(oSettings, aData, iDataIndex) {
-    var opOperator = document.getElementById('open_range').value;
-    var opOperator2 = document.getElementById('open_range_2').value;
-    var clOperator = document.getElementById('close_range').value;
-    var clOperator2 = document.getElementById('close_range_2').value;
-    var opFieldRaw = document.getElementById('date_open').value;
-    var opFieldRaw2 = document.getElementById('date_open_2').value;
-    var clFieldRaw = document.getElementById('date_close').value;
-    var clFieldRaw2 = document.getElementById('date_close_2').value;
-    var opRowRaw = aData[6];
-    var clRowRaw = aData[7];
-
-    //date conversions
-
-    var opField = opFieldRaw.substring(6, 10) + opFieldRaw.substring(0, 2) + opFieldRaw.substring(3, 5);
-    var opField2 = opFieldRaw2.substring(6, 10) + opFieldRaw2.substring(0, 2) + opFieldRaw2.substring(3, 5);
-    var clField = clFieldRaw.substring(6, 10) + clFieldRaw.substring(0, 2) + clFieldRaw.substring(3, 5);
-    var clField2 = clFieldRaw2.substring(6, 10) + clFieldRaw2.substring(0, 2) + clFieldRaw2.substring(3, 5);
-    var opRow = opRowRaw.substring(6, 10) + opRowRaw.substring(0, 2) + opRowRaw.substring(3, 5);
-    var clRow = clRowRaw.substring(6, 10) + clRowRaw.substring(0, 2) + clRowRaw.substring(3, 5);
-
-    //no filtering
-    if (opField === '' && clField === '') {
-        return true;
-    }
-
-    //filtering by date open only
-    if (opField !== '' && clField === '' && opField2 === '' && clField2 === '') {
-        if (opOperator === 'equals' && opRow === opField) {
-            return true;
-        }
-
-        else if (opOperator === 'less' && opRow < opField) {
-            return true;
-        }
-
-        else if (opOperator === 'greater' && opRow > opField) {
-            return true;
-        }
-    }
-
-    //filtering by date closed only
-    if (opField === '' && clField !== '' && opField2 === '' && clField2 === '') {
-        if (clOperator === 'equals' && clRow === clField) {
-            return true;
-        }
-
-        else if (clOperator === 'less' && clRow < clField) {
-            return true;
-        }
-
-        else if (clOperator === 'greater' && clRow > clField) {
-            return true;
-        }
-    }
-
-    //filter range between open and closed dates
-    if (opField !== '' && clField !== '' && opField2 === '' && clField2 === '') {
-        if (opOperator === 'equals' && clOperator === 'equals' && opRow === opField && clRow === clField) {
-            return true;
-        }
-
-        else if (opOperator === 'greater' && clOperator === 'less' && opRow > opField && clRow < clField) {
-            return true;
-        }
-
-        else if (opOperator === 'less' && clOperator === 'greater' && opRow < opField && clRow > clField) {
-            return true;
-        }
-    }
-
-    //filter between open dates
-    if (opField !== '' && clField === '' && opField2 !== '' && clField2 === '') {
-        if (opOperator === 'equals' && opOperator2 === 'equals' && opRow === opField && opRow === opField2) {
-            return true;
-        }
-
-        else if (opOperator === 'greater' && opOperator2 === 'less' && opRow > opField && opRow < opField2) {
-            return true;
-        }
-
-        else if (opOperator === 'less' && opOperator2 === 'greater' && opRow < opField && opRow > opField2) {
-            return true;
-        }
-    }
-
-    //filter between close dates
-    if (opField === '' && clField !== '' && opField2 === '' && clField2 !== '') {
-        if (clOperator === 'equals' && clOperator2 === 'equals' && clRow === clField && clRow === clField2) {
-            return true;
-        }
-
-        else if (clOperator === 'greater' && clOperator2 === 'less' && clRow > clField && clRow < clField2) {
-            return true;
-        }
-
-        else if (clOperator === 'less' && clOperator2 === 'greater' && clRow < clField && clRow > clField2) {
-            return true;
-        }
-    }
-
-    //Find open/close range within an open/close range
-    if (opField !== '' && clField !== '' && opField2 !== '' && clField2 !== '') {
-        if (opOperator === 'equals' && opOperator2 === 'equals' && clOperator === 'equals' &&
-        opOperator2 === 'equals' && opRow === opField && opRow === opField2 && clRow === clField && clRow === clField2) {
-            return true;
-        }
-
-        else if (opOperator === 'greater' && opOperator2 === 'less' && clOperator === 'greater' && opOperator2 === 'less' &&
-        opRow > opField && opRow < opField2 && clRow > clField && clRow < clField2) {
-            return true;
-        }
-    }
-
-    //Find specific close date with an open range
-    if (opField !== '' && clField !== '' && opField2 !== '' && clField2 === '') {
-        if (opOperator=== 'greater' && opOperator2=== 'less' && clOperator=== 'equals' &&
-        opRow > opField && opRow < opField2 && clRow === clField) {
-            return true;
-        }
-
-        if (opOperator === 'greater' && opOperator2 === 'less' && clOperator === 'greater' && opRow > opField &&
-        opRow < opField2 && clRow > clField) {
-            return true;
-        }
-
-        if (opOperator === 'greater' && opOperator2 === 'less' && clOperator === 'less' && opRow > opField &&
-        opRow < opField2 && clRow < clField) {
-            return true;
-        }
-    }
-
-    //Find specific open date with a closed range
-    if (opField !== '' && clField !== '' && opField2 === '' && clField2 !== '') {
-        if (clOperator === 'greater' && clOperator2 === 'less' && opOperator === 'equals' && clRow > clField &&
-        clRow < clField2 && opRow === opField) {
-            return true;
-        }
-
-        if (clOperator === 'greater' && clOperator2 === 'less' && opOperator === 'greater' && clRow > clField &&
-        clRow < clField2 && opRow > opField) {
-            return true;
-        }
-
-        if (clOperator === 'greater' && clOperator2 === 'less' && opOperator === 'less' && clRow > clField &&
-        clRow < clField2 && opRow < opField) {
-            return true;
-        }
-    }
-    return false;
+let open_case_ids = [];
+let caseData;
+let openCasesDataArray;
+let closedCasesDataArray;
+let open_cases_container;
+let open_cases_tab_button;
+let table;
+let caseEditFormIsSubmitting = false;
+// Set these to values to global variables
+function initOpenCaseFunctions() {
+  open_cases_container = document.querySelector('.open-cases-container');
+  open_cases_tab_button = document.querySelector(
+    "[data-bs-target='#openCases']",
+  );
 }
-);
 
+async function initCasesTable() {
+  try {
+    // Fetch the inital state column visibility information
+    const columnResponse = await axios.get(
+      `lib/php/data/cases_columns_load.php`,
+    );
+    const columnResponseData = columnResponse.data;
+
+    // Fetch all case data
+    const caseDataResponse = await axios.get(`lib/php/data/cases_load.php`);
+    caseData = caseDataResponse.data.aaData;
+
+    // Custom table plugin initiation
+    table = new Table({
+      columns: columnResponseData.aoColumns,
+      data: caseData,
+      containerId: '#table_cases',
+      facets: [
+        {
+          label: 'Open Cases',
+          value: 'open',
+          field: 'date_close',
+          filter: (item) => {
+            return !item.date_close;
+          },
+          default: true,
+        },
+        {
+          label: 'Closed Cases',
+          value: 'closed',
+          field: 'date_close',
+          filter: (item) => {
+            return item.date_close;
+          },
+        },
+        {
+          label: 'All Cases',
+          value: 'all',
+          field: 'date_close',
+          filter: () => {
+            return true;
+          },
+        },
+      ],
+    });
+  } catch (error) {
+    alertify.error(error);
+  } finally {
+    registerTableRowClickEvent();
+  }
+}
+
+function registerTableRowClickEvent() {
+  table.onRowClick((event) => {
+    const dataset = event.target.dataset;
+    // if the td is a header, we don't want to  perform
+    // this action
+    if (!dataset.header) {
+      const id = dataset.caseid;
+      const name = dataset.name;
+      openCase(id, name);
+    }
+  });
+}
+
+function addCountToOpenCasesLabel() {
+  const count = open_case_ids.length;
+  const notification = document.querySelector(
+    '[data-bs-target="#openCases"] .notification',
+  );
+  notification.innerText = count || '';
+}
+
+function setUpOpenCasesMobileSelectListener() {
+  const mobileCasesSelector = document.querySelector(
+    '#openCasesTabsMobile select',
+  );
+  mobileCasesSelector.addEventListener('change', () => {
+    const value = mobileCasesSelector.value;
+    const tab = document.querySelector(`#case${value}Tab`);
+    tab?.click();
+  });
+}
+
+function setUpCloseCaseMobileListener() {
+  const closeCaseButton = document.querySelector(`#closeCaseTabMobile`);
+  closeCaseButton.addEventListener('click', () => {
+    const selectValue = document.querySelector(
+      '#openCasesTabsMobile select',
+    )?.value;
+    if (selectValue) {
+      closeTab(selectValue);
+      addCountToOpenCasesLabel();
+    }
+  });
+}
+
+async function openCase(id, name) {
+  if (!open_case_ids.includes(id)) {
+    open_case_ids.push(id);
+    const tabContainer = document.querySelector('#openCasesTabs');
+    const tabContentContainer = document.querySelector('#openCasesTabContent');
+    const panes = tabContentContainer.querySelectorAll('.tab-pane');
+    const contentLabel = `case${id}Content`;
+    // set the value in the mobile dropdown for
+    // open cases
+
+    panes.forEach((pane) => {
+      pane.classList.remove('show', 'active');
+    });
+    addCountToOpenCasesLabel();
+    const button = createOpenCasesButton(id, name, contentLabel);
+    const closeButton = createCloseButton(id);
+    button.append(closeButton);
+    tabContainer.appendChild(button);
+
+    const content = createContentContainer(name, contentLabel);
+    tabContentContainer.appendChild(content);
+    const mobileCasesSelector = document.querySelector(
+      '#openCasesTabsMobile select',
+    );
+    // TODO this needs to work more like tabs
+    const newOption = createNewOption(id, name);
+    mobileCasesSelector.appendChild(newOption);
+    try {
+      const caseView = await getCaseView(id);
+      content.innerHTML = caseView.data;
+      const caseNotes = await getCaseNotes(id);
+      const notesContainer = document.querySelector(`#nav-${id}-notes`);
+      notesContainer.innerHTML = caseNotes.data;
+      const caseData = await getCaseData(id);
+      const dataContainer = document.querySelector(`#nav-${id}-data`);
+      dataContainer.innerHTML = caseData.data;
+      const cc_docs_view = getCookie('cc_docs_view');
+      const documentsData = await getDocuments(
+        id,
+        '',
+        null,
+        cc_docs_view === 'list' || null,
+      );
+      const documentsContainer = document.querySelector(`#nav-${id}-documents`);
+      documentsContainer.innerHTML = documentsData;
+      const caseEvents = await getCaseEventData(id);
+      const eventsContainer = document.querySelector(`#nav-${id}-events`);
+      eventsContainer.innerHTML = caseEvents;
+      setUpCasePrintFunctionality(id, name);
+      setUpOpenEditCaseViewFunctionality(id);
+      setUpCancelEditFunctionality(id);
+      setUpSaveCaseFunctionality(id);
+      setLetMeEditThisFunctionality(id);
+      setUpAddItemsButtonFunctionality(id);
+      setUpAssignedUsersFunctionality(id);
+    } catch (error) {
+      console.log(error);
+      alertify.error(error);
+    } finally {
+      button.click();
+    }
+  }
+  open_cases_tab_button.classList.remove('disabled');
+  open_cases_tab_button.setAttribute('aria-disabled', 'false');
+  open_cases_tab_button.click();
+  setValueOfMobileSelect(id);
+}
+
+function setValueOfMobileSelect(id) {
+  document.querySelector('#openCasesTabsMobile select').value = id;
+}
+
+function setUpCasePrintFunctionality(id, name) {
+  const button = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataPrintButton');
+  const caseData = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseData');
+  button.removeEventListener('click', printPDF);
+  button.addEventListener('click', printPDF);
+
+  function printPDF() {
+    html2pdf().from(caseData).save(`${name} Case Data`);
+  }
+}
+
+function createOpenCasesButton(id, name, contentLabel) {
+  const button = document.createElement('button');
+  button.classList.add('nav-link');
+  const tabLabel = `case${id}Tab`;
+  button.setAttribute('id', tabLabel);
+  button.setAttribute('data-bs-toggle', 'tab');
+  button.setAttribute('data-bs-target', `#${contentLabel}`);
+  button.setAttribute('type', 'button');
+  button.setAttribute('role', 'tab');
+  button.setAttribute('aria-controls', contentLabel);
+  button.setAttribute('aria-selected', true);
+  button.innerText = name;
+  return button;
+}
+
+function createCloseButton(id) {
+  const closeButton = document.createElement('span');
+  closeButton.classList.add('tab-close');
+  closeButton.innerHTML = '&times;';
+  closeButton.addEventListener('click', () => closeTab(id));
+  return closeButton;
+}
+
+function createContentContainer(name, contentLabel) {
+  const content = document.createElement('div');
+  content.classList.add('tab-pane', 'fade', 'show', 'active');
+  content.setAttribute('id', contentLabel);
+  content.setAttribute('role', 'tabpanel');
+  content.setAttribute('aria-labelledby', contentLabel);
+  content.innerText = name;
+  content.style.backgroundColor = 'white';
+  return content;
+}
+
+function createNewOption(id, name) {
+  const newOption = document.createElement('option');
+  newOption.value = id;
+  newOption.innerText = name;
+  newOption.setAttribute('id', `case${id}Option`);
+  return newOption;
+}
+
+function setUpOpenEditCaseViewFunctionality(id) {
+  const button = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#editCaseButton');
+  const editCase = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#editCaseData');
+  const viewCase = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#viewCaseData');
+  const printButton = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataPrintButton');
+  const saveButton = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataSaveButton');
+  const cancelButton = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataCancelButton');
+
+  button.addEventListener('click', () => {
+    button.classList.add('hidden');
+    editCase.classList.remove('hidden');
+    viewCase.classList.add('hidden');
+    printButton.classList.add('hidden');
+    saveButton.classList.remove('hidden');
+    cancelButton.classList.remove('hidden');
+    setAlertToNotLoseCaseData();
+  });
+}
+
+function setUpSaveCaseFunctionality(id) {
+  // hook up the button
+  const button = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataSaveButton');
+  button.addEventListener('click', async () => {
+    try {
+      caseEditFormIsSubmitting = true;
+      const form = document
+        .querySelector(`#nav-${id}-tabContent`)
+        .querySelector('#editCaseData');
+      form.classList.remove('invalid');
+      if (!form.checkValidity()) {
+        form.classList.add('invalid');
+        const invalidFields = [];
+        form.elements.forEach((el) => {
+          if (!el.checkValidity()) {
+            invalidFields.push(el.name);
+          }
+        });
+        throw new Error(`Fix invalid field(s): ${invalidFields.join(', ')}`);
+      }
+      const formState = [...form.elements].reduce((prev, current) => {
+        const name = current.name;
+        const isDual = Boolean(current.dataset.dual);
+
+        if (name && !isDual) {
+          prev[current.name] = current.value;
+        }
+        return prev;
+      }, {});
+
+      // Extract values from all dual inputs
+      const dualInputs = document.querySelectorAll(
+        `#nav-${id}-tabContent .form-control__dual`,
+      );
+      const dualInputValues = getDualInputValues(dualInputs);
+      const editCaseResponse = await axios.post(
+        `lib/php/data/cases_case_data_process.php`,
+        {
+          action: 'edit',
+          id,
+          ...formState,
+          ...dualInputValues,
+        },
+        {
+          headers: {
+            'Content-type': 'application/json',
+          },
+        },
+      );
+      caseEditFormIsSubmitting = false;
+      const data = JSON.parse(JSON.stringify(editCaseResponse.data));
+      if (data.error) {
+        alertify.error(data.message);
+      } else {
+        alertify.success(data.message);
+        const displayFields = document
+          .querySelector(`#nav-${id}-tabContent`)
+          .querySelectorAll('#viewCaseData [data-displayfield]');
+        displayFields.forEach((el) => {
+          const field = el.dataset.displayfield;
+          if (formState[field]) {
+            el.innerText = formState[field];
+          } else if (dualInputValues[field]) {
+            el.innerText = Object.keys(JSON.parse(dualInputValues[field])).join(
+              ', ',
+            );
+          }
+        });
+
+        // update the name in the tab for this case
+        const updatedName = `${formState.last_name}, ${formState.first_name}`;
+        const dataContainer = document.querySelector(`#case${id}Tab`);
+        dataContainer.innerText = updatedName;
+        // update the print functionality to reflect the changes
+        setUpCasePrintFunctionality(id, updatedName);
+        resentCaseDataUI(id);
+      }
+    } catch (error) {
+      alertify.error(error.message);
+    }
+  });
+}
+
+function setUpCancelEditFunctionality(id) {
+  const button = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataCancelButton');
+  const form = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#editCaseData');
+  // save the initial state of the form
+  const initialState = [...form.elements].map((el) => {
+    const obj = {};
+    obj['name'] = el.name;
+    obj['value'] = el.value;
+    return obj;
+  });
+
+  button.addEventListener('click', () => {
+    alertify.confirm(
+      'Confirm',
+      'Are you sure you want to cancel? You may lose data.',
+      () => {
+        // revert the form to the initial state
+        initialState.forEach((el) => {
+          if (el.name) {
+            const input = form[el.name];
+            input.value = el.value;
+            if (el.value) {
+              const label = document
+                .querySelector(`#nav-${id}-tabContent`)
+                .querySelector(input.dataset?.label);
+              if (label && !label.classList.contains('float')) {
+                label.classList.add('float');
+              }
+            }
+          }
+        });
+        // reset the UI
+        resentCaseDataUI(id);
+      },
+      null,
+    );
+  });
+}
+
+function resentCaseDataUI(id) {
+  document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataCancelButton')
+    .classList.add('hidden');
+  document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataSaveButton')
+    .classList.add('hidden');
+  document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#caseDataPrintButton')
+    .classList.remove('hidden');
+  document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#editCaseButton')
+    .classList.remove('hidden');
+  document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#editCaseData')
+    .classList.add('hidden');
+  document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector('#viewCaseData')
+    .classList.remove('hidden');
+  removeAlertToNotLoseCaseData();
+}
+function setAlertToNotLoseCaseData() {
+  window.onbeforeunload = (e) => {
+    areYouSure(e);
+  };
+}
+
+function removeAlertToNotLoseCaseData() {
+  window.onbeforeunload = () => {};
+}
+
+function areYouSure(e) {
+  e.preventDefault();
+  if (caseEditFormIsSubmitting) {
+    return undefined;
+  }
+
+  let confirmationMessage =
+    'It looks like you have been editing something. ' +
+    'If you leave before saving, your changes will be lost.';
+
+  (e || window.event).returnValue = confirmationMessage; //Gecko + IE
+  return confirmationMessage; //Gecko + Webkit, Safari, Chrome etc.
+}
+
+function setLetMeEditThisFunctionality(id) {
+  const letMeEditThisButton = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelector(`.let-me-edit-this[data-target="${id}"]`);
+  letMeEditThisButton.addEventListener('click', () => {
+    if (
+      confirm(
+        'ClinicCases automatically assigns the next available case number. If your case number contains "CaseType" or "ClinicType", these values will be replaced when you change those fields below. Manually editing a case number may have undesirable results. Are you sure?',
+      )
+    ) {
+      const clinicIdInput = document
+        .querySelector(`#nav-${id}-tabContent`)
+        .querySelector(`[name="clinic_id"]`);
+      clinicIdInput.disabled = false;
+    }
+  });
+}
+
+function setUpAddItemsButtonFunctionality(id) {
+  const addItemButtons = document
+    .querySelector(`#nav-${id}-tabContent`)
+    .querySelectorAll(`.add-item-button`);
+
+  addItemButtons.forEach((button) => {
+    button.addEventListener('click', () => addNewItem(button));
+  });
+}
+
+function closeTab(id) {
+  open_case_ids = open_case_ids.filter((case_id) => case_id != id);
+  const tabContent = document.querySelector(`#case${id}Content`);
+  const tabButton = document.querySelector(`#case${id}Tab`);
+  const option = document.querySelector(`#case${id}Option`);
+  tabContent.remove();
+  tabButton.remove();
+  option.remove();
+  if (!open_case_ids.length) {
+    removeOpenCaseTab();
+    navigateToSearchCases();
+  }
+}
+
+function removeOpenCaseTab() {
+  document
+    .querySelector('[data-bs-target="#openCases"]')
+    ?.classList.add('disabled');
+}
+
+function navigateToSearchCases() {
+  document.querySelector(`[data-bs-target="#searchCases"]`)?.click();
+}
+
+async function setUpAssignedUsersFunctionality(id) {
+  const assignedUsersView = await getAssignedUsersView(id);
+  const assignedUsersContainer = document.querySelector(
+    `#case${id}Content #assignedUsersContainer > div`,
+  );
+  assignedUsersContainer.innerHTML = assignedUsersView.data;
+  const assignedUsersInterface = await getAssignedUsersInterface(id);
+  const addAssignedUser = document.querySelector(
+    `#case${id}Content #addAssignedUser`,
+  );
+  addAssignedUser.innerHTML = assignedUsersInterface;
+
+  // Register the select/search combo box
+  const slimSelect = new SlimSelect({
+    select: `#case${id}Content .slim-select`,
+  });
+  initTooltips();
+  registerAddCaseClickEvent();
+  // register the click even to cancel the form
+  document
+    .querySelector(`#case${id}Content .cancel-add-user-button`)
+    .addEventListener('click', closeAddUsersForm);
+  // Register the click even for adding users
+  document
+    .querySelector(`#case${id}Content .add-user-button`)
+    .addEventListener('click', async () => {
+      try {
+        await assignUsersToCase(id, slimSelect.selected());
+        const updatedAssignedUsersView = await getAssignedUsersView(id).then(
+          (res) => res.data,
+        );
+        const userList = document.querySelector(
+          `#case${id}Content #assignedUsersContainer > div`,
+        );
+        userList.innerHTML = updatedAssignedUsersView;
+        registerAddCaseClickEvent();
+        initTooltips();
+        alertify.success('Users successfully assigned.');
+      } catch {
+        alertify.success('Error assigning users.');
+      } finally {
+        closeAddUsersForm();
+      }
+    });
+
+  function closeAddUsersForm() {
+    document
+      .querySelector(`#case${id}Content #addAssignedUser`)
+      .classList.remove('open');
+  }
+  function registerAddCaseClickEvent() {
+    document
+      .querySelector(`#case${id}Content .user_add_button`)
+      .addEventListener('click', () => {
+        const dropdown = document.querySelector(
+          `#case${id}Content #addAssignedUser`,
+        );
+        dropdown.classList.add('open');
+      });
+  }
+
+  function initTooltips() {
+    // initialize the tooltips
+    var tooltipTriggerList = [
+      ...document.querySelectorAll('[data-bs-toggle="tooltip"]'),
+    ];
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  }
+}

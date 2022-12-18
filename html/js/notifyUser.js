@@ -1,28 +1,59 @@
 //js functions to notify user.
 
 function notify(str, wait, state) {
-    $('#notifications').html(str);
-    //.css({'opacity': '.8'});
-    $('#notifications').addClass('ui-corner-all').show();
+    const notifications = document.querySelector('#notifications');
+    notifications.innerHTML = str;
+    notifications.style.display = 'block';
+
     if (state === 'error'){
-        $('#notifications').css({'color':'white', 'font-weight': 'bold',  'background-color':'red'});
+        notifications.classList.add('notification--error');
     } else if (state ==='success'){
-        $('#notifications').css({'color':'white', 'font-weight': 'bold', 'background-color':'green'});
+        notifications.classList.add("notification--success")
     } else {
-        if ($('body').hasClass('isMobile')){
-            $('#notifications').css({'color':'#3a87ad', 'font-weight': 'normal', 'background-color':'#d9edf7'});
+        const body = document.querySelector('body');
+        if(body.classList.contains('isMobile')) {
+            notifications.style.color = '#3a87ad';
+            notifications.style.fontWeight = 'normal';
+            notifications.style.backgroundColor = '#d9edf7';
         } else {
-            $('#notifications').css({'color':'black', 'font-weight': 'normal', 'background-color':'white'});
+            notifications.style.color = 'black';
+            notifications.style.fontWeight = 'normal';
+            notifications.style.backgroundColor = 'white';
         }
+     
     }
 
     if (wait === true) {
-        $('#notifications').append('<p><a href="">Dismiss</a></p>');
-        $('#notifications a').click(function (event) {
+        const p = document.createElement('p');
+        p.innerHTML  = '<a href="">&times;</a>';
+        notifications.appendChild(p)
+        const link = notifications.querySelector('a');
+        link.addEventListener('click', (event)=> {
             event.preventDefault();
-            $('#notifications').fadeOut();
-        });
+            fadeOutEffect(notifications)
+        })
+
     } else {
-        $('#notifications').delay(2000).fadeOut();
+        setTimeout(
+            ()=> {
+                notifications.classList = '';
+                fadeOutEffect(notifications)
+
+            }, 200
+        )
     }
+}
+
+
+function fadeOutEffect(fadeTarget) {
+    var fadeEffect = setInterval(function () {
+        if (!fadeTarget.style.opacity) {
+            fadeTarget.style.opacity = 1;
+        }
+        if (fadeTarget.style.opacity > 0) {
+            fadeTarget.style.opacity -= 0.1;
+        } else {
+            clearInterval(fadeEffect);
+        }
+    }, 200);
 }
